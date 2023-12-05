@@ -6,18 +6,18 @@ include { SAMPLESHEET_CHECK } from '../../modules/local/samplesheet_check'
 
 workflow INPUT_CHECK {
     take:
-    samplesheet // file: /path/to/samplesheet.csv
+        samplesheet // file: /path/to/samplesheet.csv
 
     main:
-    SAMPLESHEET_CHECK ( samplesheet )
-        .csv
-        .splitCsv ( header:true, sep:',' )
-        .map { create_h5_channel(it) }
-        .set { h5s }
+        SAMPLESHEET_CHECK ( samplesheet )
+            .csv
+            .splitCsv ( header:true, sep:',' )
+            .map { create_h5_channel(it) }
+            .set { h5s }
 
     emit:
-    h5s                                       // channel: [ val(meta), [ h5s ] ]
-    versions = SAMPLESHEET_CHECK.out.versions // channel: [ versions.yml ]
+        h5s                                       // channel: [ val(meta), [ h5s ] ]
+        versions = SAMPLESHEET_CHECK.out.versions // channel: [ versions.yml ]
 }
 
 // Function to get list of [ meta, [ fastq_1, fastq_2 ] ]
