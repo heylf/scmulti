@@ -108,8 +108,6 @@ rnas = []
 #samples = args['samples'].split(",")
 samples = ['sSL0129']
 
-num_samples = 0
-
 #TODO
 #for file in args['files'].split(","):
 for file in ['/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5']:
@@ -343,7 +341,7 @@ figures.append(fig)
 # Generate HTML --------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
 
-with open('rna_qc_mqc.html', 'w') as f:
+with open('rna_qc_sample_mqc.html', 'w') as f:
     for fig in figures:
         f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
@@ -369,14 +367,81 @@ if ( demux_files ):
 
     rna.obs = rna.obs.join(assignments, how="left")
 
-# Get number of donors
-ndonor = len(set(rna.obs["donor_id"].tolist()))
+    # In[]
+    # Get number of donors
+    ndonor = len(set(rna.obs["donor_id"].tolist()))
 
-# Generate Colors for organoids
-r = lambda: random.randint(0,255)
-DONOR_COLORS = ['#%02X%02X%02X' % (r(),r(),r()) for i in range(0,ndonor)]
-DONOR_COLORS[sorted(set(rna.obs["clone"].tolist())).index("unassigned")] = "Black"
-DONOR_COLORS[sorted(set(rna.obs["clone"].tolist())).index("doublet")] = "Red"
+    # Generate Colors for organoids
+    r = lambda: random.randint(0,255)
+    DONOR_COLORS = ['#%02X%02X%02X' % (r(),r(),r()) for i in range(0,ndonor)]
+    DONOR_COLORS[sorted(set(rna.obs["donor_id"].tolist())).index("unassigned")] = "Black"
+    DONOR_COLORS[sorted(set(rna.obs["donor_id"].tolist())).index("doublet")] = "Red"
+
+
+    figures = []
+
+    donor_series = rna.obs.groupby("sample")["donor_id"]
+    num_donors = []
+    num_samples = len(set(rna.obs["sample"].tolist()))
+
+    fractions = [0.0, 0.0, 0.0] *  num_samples
+    fractions_cat = ["unassigned", "doublet", "assigned"] * num_samples
+
+    i = 0
+    n = 0
+    for i, item in enumerate(donor_series):
+
+        sample = item[0]
+            
+        sample_donor_df = donor_series.get_group(sample).value_counts()
+
+        total_cell = sum(sample_donor_df)
+
+        fractions[i + n] = sample_donor_df["unassigned"]/total_cell
+        fractions[i + (n+1)] = sample_donor_df["doublet"]/total_cell
+
+        sample_donor_df = sample_donor_df.drop(["unassigned", "doublet"], axis=0)
+        num_donors.append(len(set(sample_donor_df.index.values)))
+
+        fractions[i + (n+2)] = sum(sample_donor_df)/total_cell
+
+        n = i + 2
+        i += 1
+
+    d = {'sample': samples, 'num_donors': num_donors}
+    d = pd.DataFrame(data=d, index=samples)
+
+    # Plot
+    fig = px.bar(d, x='sample', y='num_donors')
+    fig.update_layout(
+        xaxis=dict(title="Sample"),
+        yaxis=dict(title="Number of Donors"),
+        title="Number of Donors per Sample"
+    )
+    figures.append(fig)
+
+
+    d = {'sample': [s for s in samples for _ in (0, 1, 2)], 'category_cells': fractions_cat, 
+        'frac_cells': fractions}
+    d = pd.DataFrame(data=d, index=[x for x in range(0, len(samples)*3)])
+
+    fig = px.bar(d, x='sample', y='frac_cells', color='category_cells')
+    fig.update_layout(
+        xaxis=dict(title="Sample"),
+        yaxis=dict(title="Fraction of Cells"),
+        title="Fraction of Cells per Sample"
+    )
+    figures.append(fig)
+
+    # ----------------------------------------------------------------------------------------------------------------------
+    # Generate HTML --------------------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------------------------------
+
+    with open('rna_qc_donor_mqc.html', 'w') as f:
+        for fig in figures:
+            f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+
+
 
 
 
