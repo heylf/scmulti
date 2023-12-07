@@ -204,7 +204,7 @@ if __name__ == '__main__':
     # Generate HTML --------------------------------------------------------------------------------------------------------
     # ----------------------------------------------------------------------------------------------------------------------
 
-    with open('atac_qc_mqc.html', 'w') as f:
+    with open('atac_qc_sample_mqc.html', 'w') as f:
         for fig in figures:
             f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
