@@ -8,12 +8,12 @@ import anndata as ad
 import scanpy as sc
 import numpy as np
 import pandas as pd
-import json
 import plotly.express as px
 import plotly.graph_objects as go
 import random
 
 # pip install nbformat
+# pip install pysam
 
 # In[]
 #########################################
@@ -28,15 +28,39 @@ Runnin QC
 parser = argparse.ArgumentParser(description=tool_description, formatter_class=argparse.RawDescriptionHelpFormatter)
 
 # version
-parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
 parser.add_argument("-v", "--version", action="version", version="%(prog)s 0.1.0")
+
+# Required arguments
+parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
 parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=True, help="Sample names")
-parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="Output dir")
+parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="h5 files")
+
+# Optional arguments
+parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
+parser.add_argument("--thresh_gene", dest="thresh_gene", metavar='str', required=False, 
+                    help="Threshold for gene cell count filter", default=100)
+parser.add_argument("--thresh_umi_genecount", dest="thresh_umi_genecount", metavar='str', required=False, 
+                    help="Threshold for UMI and gene counr filter", default=500)
+parser.add_argument("--thresh_mt", dest="thresh_mt", metavar='str', required=False, 
+                    help="Threshold for mitochondrial filter", default=20)
+parser.add_argument("--thresh_rb", dest="thresh_rb", metavar='str', required=False, 
+                    help="Threshold for ribsomal coverage filter", default=10)
 
 args = vars(parser.parse_args())
 
+# TODO control it by args
+THRESH_GENE_FILTER = args["thresh_gene"]
+THRESH_UMI_N_GENES = args["thresh_umi_genecount"]
+THRESH_MT = args["thresh_mt"]
+THRESH_RB = args["thresh_rb"]
+
 # In[]
 print("[START]")
+
+THRESH_GENE_FILTER = 100
+THRESH_UMI_N_GENES = 500
+THRESH_MT = 20
+THRESH_RB = 10
 
 # Seeds (!!! DO NOT CHANGE THIS SEED !!!)
 seed = 123
@@ -78,23 +102,23 @@ def get_ci_df(count_series, mode, rna):
 # It also generates a table for the necessary information (arc_aggr_df.to_csv)
 print("[TASK] Load data")
 
-atacs = []
 rnas = []
-# samples = args['samples'].split(",")
-samples = 'test_ARC'
+
+#TODO 
+#samples = args['samples'].split(",")
+samples = ['sSL0129']
 
 num_samples = 0
 
-# for file in args['files'].split(","):
-for file in ['/home/florian/Documents/tmp_data_folder/output/cellrangerarc/count/test_scARC/outs/filtered_feature_bc_matrix.h5']:
+#TODO
+#for file in args['files'].split(","):
+for file in ['/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5']:
     print(file)
 
     cdata = mu.read_10x_h5(file)
 
     cdata["rna"].var_names_make_unique()
-    cdata["atac"].var_names_make_unique()
     
-    atacs.append(cdata["atac"])
     rnas.append(cdata["rna"])
 
 sample_name_sorted_indices = np.argsort(np.array(samples))
@@ -102,10 +126,6 @@ sample_name_sorted_indices = np.argsort(np.array(samples))
 # Get RNA counts
 rna = ad.concat([rnas[i] for i in sample_name_sorted_indices], 
                 label="sample", keys=[samples[i] for i in sample_name_sorted_indices], index_unique="_", merge="same")
-
-# Get ATAC counts
-atac = ad.concat([atacs[i] for i in sample_name_sorted_indices], 
-                 label="sample", keys=[samples[i] for i in sample_name_sorted_indices], index_unique="_", merge="same")
 
 ########################
 ###### PREPARE QC ######
@@ -117,19 +137,12 @@ rna.var["mt"] = rna.var_names.str.startswith("MT-") # this will add mitochondria
 rna.var["ribo"] = rna.var_names.str.startswith("RPS") | rna.var_names.str.startswith("RPL") # this will add ribosomal RNA QC
 sc.pp.calculate_qc_metrics(rna, qc_vars=["mt", "ribo"], inplace=True)
 
-# Add QC levels for samples
-sample_series = rna.obs.groupby("sample")
-
-#In[]
-# TODO add thresholds for UMI etc.
-
-###########################
-###### MULTIQC PLOTS ######
-###########################
-print("[TASK] Generate Multiqc plots")
+##########################
+###### QC PLOTS RNA ######
+##########################
+print("[TASK] Generate QC plots RNA")
 
 d = rna.obs.groupby("sample").size().sort_values(ascending=False).rename("ncells").reset_index().assign(sample=lambda df: pd.Categorical(df["sample"].to_list(), df["sample"].to_list(), ordered=True))
-
 
 figures = []
 
@@ -161,10 +174,10 @@ for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_
     figures.append(fig)
 
 
-    # TODO make more beautiful
-    fig = px.histogram(rna.obs, x=level, nbins=100,
+    rna.obs[f'log_{level}'] = np.log10(rna.obs[level] + 1)
+    fig = px.histogram(rna.obs, x=f'log_{level}', nbins=100,
                     facet_col="sample", facet_col_wrap=4,
-                    log_x=True, labels={level: f"log10 {level}"},
+                    labels={level: f"log10 {level}"},
                     width=800, height=800)
     fig.update_layout(title=f"Distribution of log10 {level}",
                     showlegend=True)
@@ -213,20 +226,15 @@ for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_
 # Others -------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
 
-THRESH_GENE_FILTER = 100
-
 num_genes = len([1 for i in rna.var.n_cells_by_counts > min(THRESH_GENE_FILTER, np.ceil(0.01 * rna.n_obs)) if i == False])
 
-fig = px.histogram(rna.var, x="n_cells_by_counts", nbins=100,
-                   labels={"n_cells_by_counts": "log10 number of cells expressing > 0 (n reads)"},
-                   log_x=True,
+rna.var['log_n_cells_by_counts'] = np.log10(rna.var['n_cells_by_counts'] + 1)
+
+fig = px.histogram(rna.var, x="log_n_cells_by_counts", nbins=100,
+                   labels={"log_n_cells_by_counts": "log10 number of cells expressing > 0 (n reads)"},
                    title=f"Distribution of the number of cells per gene. From total number of {rna.n_vars} genes, {num_genes} genes have < {THRESH_GENE_FILTER} cells.")
-fig.add_vline(x=THRESH_GENE_FILTER)
+fig.add_vline(x=np.log10(THRESH_GENE_FILTER))
 figures.append(fig)
-
-
-THRESH_UMI_N_GENES = 500
-THRESH_MT = 20
 
 fig = go.Figure()
 
@@ -237,21 +245,55 @@ fig.add_trace(go.Scatter(
     marker=dict(
         size=rna.obs["pct_counts_ribo"],
         sizemode="diameter",
-        sizeref=0.1,
-        sizemin=1,
+        sizeref=5,
+        sizemin=0.1,
         color=rna.obs["pct_counts_mt"],
-        colorscale="Viridis",
+        colorscale="RdYlBu_r",
         cmin=0,
         cmax=100,
         colorbar=dict(
             title="pct_counts_mt",
             titleside="right"
+        ),
+        showscale=True,  # Add this line to show the size scale legend
+        colorbar_title="pct_counts_mt"
+    ),
+    text=[
+        f"total_counts: {count}<br>n_genes_by_counts: {genes}<br>pct_counts_ribo: {ribo}<br>pct_counts_mt: {mt}"
+        for count, genes, ribo, mt in zip(
+            rna.obs["total_counts"],
+            rna.obs["n_genes_by_counts"],
+            np.round(rna.obs["pct_counts_ribo"]),
+            np.round(rna.obs["pct_counts_mt"])
         )
-    )
+    ]
 ))
 
+fig.add_shape(
+    type="line",
+    x0=THRESH_UMI_N_GENES,
+    x1=THRESH_UMI_N_GENES,
+    y1=max(rna.obs["n_genes_by_counts"]),
+    line=dict(
+        color="black",
+        width=1
+    )
+)
+
+fig.add_shape(
+    type="line",
+    y0=THRESH_UMI_N_GENES,
+    y1=THRESH_UMI_N_GENES,
+    x1=max(rna.obs["total_counts"]),
+    line=dict(
+        color="black",
+        width=1
+    )
+)
+
 fig.update_layout(
-    title="Scatter plot of total_counts vs n_genes_by_counts vs pct_counts_mt vs pct_counts_ribo",
+    title="Scatter plot of total_counts vs n_genes_by_counts vs pct_counts_mt vs pct_counts_ribo. <br>\
+        Size of the diameter corresponds to the pct_counts_ribo.",
     xaxis=dict(
         type="log",
         title="log10 total_counts"
@@ -263,35 +305,7 @@ fig.update_layout(
     showlegend=False
 )
 
-if fig.layout.yaxis.range is not None:
-    fig.add_shape(
-        type="line",
-        x0=THRESH_UMI_N_GENES,
-        y0=fig.layout.yaxis.range[0],
-        x1=THRESH_UMI_N_GENES,
-        y1=fig.layout.yaxis.range[1],
-        line=dict(
-            color="black",
-            width=1,
-            dash="dash"
-        )
-    )
-
-if fig.layout.yaxis.range is not None:
-    fig.add_shape(
-        type="line",
-        x0=fig.layout.xaxis.range[0],
-        y0=THRESH_UMI_N_GENES,
-        x1=fig.layout.xaxis.range[1],
-        y1=THRESH_UMI_N_GENES,
-        line=dict(
-            color="black",
-            width=1,
-            dash="dash"
-        )
-    )
 figures.append(fig)
-
 
 # Plot the highest expressed genes before filtering
 import plotly.graph_objects as go
@@ -304,16 +318,23 @@ expression = rna.X.todense()[:, idx]
 genes = rna.var_names[idx]
 
 df = pd.DataFrame(expression, columns=genes)
+df_perct = df.div(np.array(rna.obs['total_counts']), axis=0)
+
+# Calculate the median for each gene
+gene_means = df_perct.mean()
+
+# Sort the genes based on their median values
+sorted_genes = gene_means.sort_values().index[::-1]
 
 fig = go.Figure()
 
-for gene in genes:
-    fig.add_trace(go.Box(y=df[gene], name=gene))
+for gene in sorted_genes:
+    fig.add_trace(go.Box(y=df_perct[gene], name=gene))
 
 fig.update_layout(
     title=f"Boxplot of {nGENES} highest expressed genes",
     xaxis=dict(title="Genes"),
-    yaxis=dict(title="Expression"),
+    yaxis=dict(title="% of total counts")
 )
 
 figures.append(fig)
@@ -325,6 +346,40 @@ figures.append(fig)
 with open('rna_qc_mqc.html', 'w') as f:
     for fig in figures:
         f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
-    
+
+
+# In[]
+#######################################
+###### QC PLOTS RNA DEMULIPLEXED ######
+#######################################
+
+#demux_files = args['demux'].split(",")
+demux_files = ["/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv"]
+
+if ( demux_files ):
+
+    # Do Demultiplexing
+    assignments = []
+    for i, file in enumerate(demux_files):
+        ass = pd.read_table(file)[["cell", "donor_id"]]
+        ass.cell += f"_{samples[i]}"
+        ass.set_index("cell", inplace=True)
+        assignments.append(ass)
+    assignments = pd.concat(assignments, axis=0)
+
+    rna.obs = rna.obs.join(assignments, how="left")
+
+# Get number of donors
+ndonor = len(set(rna.obs["donor_id"].tolist()))
+
+# Generate Colors for organoids
+r = lambda: random.randint(0,255)
+DONOR_COLORS = ['#%02X%02X%02X' % (r(),r(),r()) for i in range(0,ndonor)]
+DONOR_COLORS[sorted(set(rna.obs["clone"].tolist())).index("unassigned")] = "Black"
+DONOR_COLORS[sorted(set(rna.obs["clone"].tolist())).index("doublet")] = "Red"
+
+
+
+
 print("[FINISH]")
 # %%
