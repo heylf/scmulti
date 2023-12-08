@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-# In[]
 
 import argparse
 import muon as mu
@@ -14,11 +13,11 @@ import random
 
 # pip install nbformat
 # pip install pysam
+# pip install plotly
 
-# In[]
-#########################################
-###### GLOBAL VARS and DIRECTORIES ######
-#########################################
+########################################################################################################################
+###### GLOBAL VARS and DIRECTORIES #####################################################################################
+########################################################################################################################
 
 tool_description = """
 Runnin QC
@@ -31,11 +30,11 @@ parser = argparse.ArgumentParser(description=tool_description, formatter_class=a
 parser.add_argument("-v", "--version", action="version", version="%(prog)s 0.1.0")
 
 # Required arguments
-parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
 parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=True, help="Sample names")
 parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="h5 files")
 
 # Optional arguments
+parser.add_argument("-o", "--out", dest="out", metavar='str', required=False, help="Single cell files")
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
 parser.add_argument("--thresh_gene", dest="thresh_gene", metavar='str', required=False, 
                     help="Threshold for gene cell count filter", default=100)
@@ -48,19 +47,12 @@ parser.add_argument("--thresh_rb", dest="thresh_rb", metavar='str', required=Fal
 
 args = vars(parser.parse_args())
 
-# TODO control it by args
 THRESH_GENE_FILTER = args["thresh_gene"]
 THRESH_UMI_N_GENES = args["thresh_umi_genecount"]
 THRESH_MT = args["thresh_mt"]
 THRESH_RB = args["thresh_rb"]
 
-# In[]
 print("[START]")
-
-THRESH_GENE_FILTER = 100
-THRESH_UMI_N_GENES = 500
-THRESH_MT = 20
-THRESH_RB = 10
 
 # Seeds (!!! DO NOT CHANGE THIS SEED !!!)
 seed = 123
@@ -95,22 +87,18 @@ def get_ci_df(count_series, mode, rna):
     d = pd.DataFrame(data=d, index=[x for x in range(0, num_group*num_replicates)])
     return(d)
 
-#######################
-###### LOAD DATA ######
-#######################
+########################################################################################################################
+###### LOAD DATA #######################################################################################################
+########################################################################################################################
 # This will get us the data from cellranger-arc
 # It also generates a table for the necessary information (arc_aggr_df.to_csv)
 print("[TASK] Load data")
 
 rnas = []
 
-#TODO 
-#samples = args['samples'].split(",")
-samples = ['sSL0129']
+samples = args['samples'].split(",")
 
-#TODO
-#for file in args['files'].split(","):
-for file in ['/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5']:
+for file in args['files'].split(","):
     print(file)
 
     cdata = mu.read_10x_h5(file)
@@ -125,9 +113,9 @@ sample_name_sorted_indices = np.argsort(np.array(samples))
 rna = ad.concat([rnas[i] for i in sample_name_sorted_indices], 
                 label="sample", keys=[samples[i] for i in sample_name_sorted_indices], index_unique="_", merge="same")
 
-########################
-###### PREPARE QC ######
-########################
+########################################################################################################################
+###### PREPARE QC ######################################################################################################
+########################################################################################################################
 print("[TASK] Prepare QC")
 
 # Perform QC
@@ -135,9 +123,9 @@ rna.var["mt"] = rna.var_names.str.startswith("MT-") # this will add mitochondria
 rna.var["ribo"] = rna.var_names.str.startswith("RPS") | rna.var_names.str.startswith("RPL") # this will add ribosomal RNA QC
 sc.pp.calculate_qc_metrics(rna, qc_vars=["mt", "ribo"], inplace=True)
 
-##########################
-###### QC PLOTS RNA ######
-##########################
+########################################################################################################################
+###### QC PLOTS RNA ####################################################################################################
+########################################################################################################################
 print("[TASK] Generate QC plots RNA")
 
 d = rna.obs.groupby("sample").size().sort_values(ascending=False).rename("ncells").reset_index().assign(sample=lambda df: pd.Categorical(df["sample"].to_list(), df["sample"].to_list(), ordered=True))
@@ -167,29 +155,120 @@ for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_
     fig = px.histogram(rna.obs, x=level, nbins=100,
                     labels={level: f"{level}"},
                     width=800, height=800)
-    fig.update_layout(title=f"Distribution of {level} for all samples",
+    fig.update_layout(title=f"Total distribution of {level} for all samples",
                     showlegend=True)
     figures.append(fig)
 
+    if ( level not in ["pct_counts_mt", "pct_counts_ribo"] ):
 
-    rna.obs[f'log_{level}'] = np.log10(rna.obs[level] + 1)
-    fig = px.histogram(rna.obs, x=f'log_{level}', nbins=100,
-                    facet_col="sample", facet_col_wrap=4,
-                    labels={level: f"log10 {level}"},
-                    width=800, height=800)
-    fig.update_layout(title=f"Distribution of log10 {level}",
-                    showlegend=True)
-    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-    figures.append(fig)
+        rna.obs[f'log_{level}'] = np.log10(rna.obs[level] + 1)
 
+        # Create a histogram trace for each sample
+        traces = []
+        for sample in samples:
+            sample_data = rna.obs[rna.obs['sample'] == sample]
+            trace = go.Histogram(x=sample_data[f'log_{level}'], nbinsx=100, name=sample)
+            traces.append(trace)
 
-    fig = px.histogram(rna.obs, x=level, nbins=100,
-                    facet_col="sample", facet_col_wrap=4,
-                    labels={level: f"{level}"},
-                    width=800, height=800)
-    fig.update_layout(title=f"Distribution of {level}",
-                    showlegend=True)
-    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+        # Create the merged plot
+        fig = go.Figure(data=traces)
+
+        # Update layout
+        fig.update_layout(
+            title=f"Distribution of log10 {level} for all samples",
+            showlegend=True,
+            height=800,
+            margin=dict(t=150)  # Add more space between title and plot
+        )
+
+        fig.update_layout(
+            dict(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=list([
+                            dict(
+                                args=["visible", "legendonly"],
+                                label="Deselect All",
+                                method="restyle"
+                            ),
+                            dict(
+                                args=["visible", True],
+                                label="Select All",
+                                method="restyle"
+                            )
+                        ]),
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=1,
+                        xanchor="right",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=f"log_{level}",
+            yaxis_title="Frequency"
+        )
+
+        figures.append(fig)
+
+    # Create a histogram trace for each sample
+    traces = []
+    for sample in samples:
+        sample_data = rna.obs[rna.obs['sample'] == sample]
+        trace = go.Histogram(x=sample_data[level], nbinsx=100, name=sample)
+        traces.append(trace)
+
+    # Create the merged plot
+    fig = go.Figure(data=traces)
+
+    # Update layout
+    fig.update_layout(
+        title=f"Distribution of {level} for all samples",
+        showlegend=True,
+        height=800,
+        margin=dict(t=150)  # Add more space between title and plot
+    )
+
+    fig.update_layout(
+        dict(
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    direction="left",
+                    buttons=list([
+                        dict(
+                            args=["visible", "legendonly"],
+                            label="Deselect All",
+                            method="restyle"
+                        ),
+                        dict(
+                            args=["visible", True],
+                            label="Select All",
+                            method="restyle"
+                        )
+                    ]),
+                    pad={"r": 10, "t": 10},
+                    showactive=False,
+                    x=1,
+                    xanchor="right",
+                    y=1.1,
+                    yanchor="top"
+                ),
+            ]
+        )
+    )
+
+    fig.update_layout(
+        xaxis_title=f"{level}",
+        yaxis_title="Frequency"
+    )
+
     figures.append(fig)
 
     # Get the data for the boxplot
@@ -207,7 +286,7 @@ for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_
         xaxis=dict(
             tickangle=-45,
             tickfont=dict(size=10),
-            title="sample"
+            title="Sample"
         ),
         yaxis=dict(
             title=f"Means of {level}"
@@ -341,20 +420,18 @@ figures.append(fig)
 # Generate HTML --------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
 
-with open('rna_qc_sample_mqc.html', 'w') as f:
+with open(f'rna_qc_sample_mqc.html', 'w') as f:
     for fig in figures:
         f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
 
-# In[]
-#######################################
-###### QC PLOTS RNA DEMULIPLEXED ######
-#######################################
+########################################################################################################################
+###### QC PLOTS RNA DEMULIPLEXED #######################################################################################
+########################################################################################################################
 
-#demux_files = args['demux'].split(",")
-demux_files = ["/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv"]
+if ( args['demux'] ):
 
-if ( demux_files ):
+    demux_files = args['demux'].split(",")
 
     # Do Demultiplexing
     assignments = []
@@ -367,7 +444,6 @@ if ( demux_files ):
 
     rna.obs = rna.obs.join(assignments, how="left")
 
-    # In[]
     # Get number of donors
     ndonor = len(set(rna.obs["donor_id"].tolist()))
 
@@ -416,10 +492,9 @@ if ( demux_files ):
     fig.update_layout(
         xaxis=dict(title="Sample"),
         yaxis=dict(title="Number of Donors"),
-        title="Number of Donors per Sample"
+        title="Number of donors per sample identified by the demultiplexing tool"
     )
     figures.append(fig)
-
 
     d = {'sample': [s for s in samples for _ in (0, 1, 2)], 'category_cells': fractions_cat, 
         'frac_cells': fractions}
@@ -428,22 +503,255 @@ if ( demux_files ):
     fig = px.bar(d, x='sample', y='frac_cells', color='category_cells')
     fig.update_layout(
         xaxis=dict(title="Sample"),
-        yaxis=dict(title="Fraction of Cells"),
-        title="Fraction of Cells per Sample"
+        yaxis=dict(title="Fraction of cells"),
+        title="Fraction of cells per sample assigned by the demultiplexing tool"
     )
     figures.append(fig)
 
-    # ----------------------------------------------------------------------------------------------------------------------
-    # Generate HTML --------------------------------------------------------------------------------------------------------
-    # ----------------------------------------------------------------------------------------------------------------------
+    # Plot
+    d = rna.obs.groupby("donor_id").size().sort_values(ascending=False).rename("ncells").reset_index()\
+        .assign(donor=lambda df: pd.Categorical(df["donor_id"].to_list(), df["donor_id"].to_list(), ordered=True))
+        
+    # ------------------------------------------------------------------------------------------------------------------
+    # Cell Counts ------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+    fig = px.bar(d, x="donor_id", y="ncells", text="ncells", barmode="stack")
+    fig.update_layout(
+        yaxis_title="Number of cells",
+        xaxis_title="Samples",
+        title="Total number of cells per sample",
+        hovermode=False  # Deactivate hover info
+    )
+    fig.update_layout(xaxis_tickangle=-90)
+    figures.append(fig)     
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # UMI/Gene/MT/RB ---------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # Get unique donors
+    unique_donors = rna.obs['donor_id'].unique()
+
+    for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_ribo"]:
+    
+        # Create a histogram trace for each donor
+        traces = []
+        for donor in unique_donors:
+            donor_data = rna.obs[rna.obs['donor_id'] == donor]
+            trace = go.Histogram(x=donor_data[level], nbinsx=100, name=donor)
+            traces.append(trace)
+
+        # Create the merged plot
+        fig = go.Figure(data=traces)
+
+        # Update layout
+        fig.update_layout(
+            title=f"Distribution of {level} for all donors",
+            showlegend=True,
+            height=800,
+            margin=dict(t=150)  # Add more space between title and plot
+        )
+
+        fig.update_layout(
+            dict(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=list([
+                            dict(
+                                args=["visible", "legendonly"],
+                                label="Deselect All",
+                                method="restyle"
+                            ),
+                            dict(
+                                args=["visible", True],
+                                label="Select All",
+                                method="restyle"
+                            )
+                        ]),
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=1,
+                        xanchor="right",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=f"{level}",
+            yaxis_title="Frequency"
+        )
+
+        figures.append(fig)
+
+        if ( level not in ["pct_counts_mt", "pct_counts_ribo"] ):
+
+            # Create a histogram trace for each donor
+            traces = []
+            for donor in unique_donors:
+                donor_data = rna.obs[rna.obs['donor_id'] == donor]
+                trace = go.Histogram(x=donor_data[f'log_{level}'], nbinsx=100, 
+                                    name=donor)
+                traces.append(trace)
+
+            # Create the merged plot
+            fig = go.Figure(data=traces)
+
+            # Update layout
+            fig.update_layout(
+                title=f"Distribution of log10 {level} for all donors",
+                showlegend=True,
+                height=800,
+                margin=dict(t=150)  # Add more space between title and plot
+            )
+
+            fig.update_layout(
+                dict(
+                    updatemenus=[
+                        dict(
+                            type="buttons",
+                            direction="left",
+                            buttons=list([
+                                dict(
+                                    args=["visible", "legendonly"],
+                                    label="Deselect All",
+                                    method="restyle"
+                                ),
+                                dict(
+                                    args=["visible", True],
+                                    label="Select All",
+                                    method="restyle"
+                                )
+                            ]),
+                            pad={"r": 10, "t": 10},
+                            showactive=False,
+                            x=1,
+                            xanchor="right",
+                            y=1.1,
+                            yanchor="top"
+                        ),
+                    ]
+                )
+            )
+
+            fig.update_layout(
+                xaxis_title=f"Log10 {level}",
+                yaxis_title="Frequency"
+            )
+
+            figures.append(fig)
+
+        # Get the data for the boxplot
+        ci_df = get_ci_df(rna.obs.groupby("donor_id")[level], "donor_id", rna)
+
+        # Create the boxplot trace
+        boxplot_trace = go.Box(
+            x=ci_df["group"],
+            y=ci_df["values"],
+            name="Means of total counts"
+        )
+
+        # Create the layout
+        layout = go.Layout(
+            xaxis=dict(
+                tickangle=-45,
+                tickfont=dict(size=10),
+                title="Donor"
+            ),
+            yaxis=dict(
+                title=f"Means of {level}"
+            ),
+            height=500,
+            width=800
+        )
+
+        # Create the figure
+        fig = go.Figure(data=[boxplot_trace], layout=layout)
+        figures.append(fig)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Sample Donor Level -----------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+
+    for level in ["log_total_counts", "log_n_genes_by_counts", "pct_counts_mt", "pct_counts_ribo"]:
+
+        from plotly.subplots import make_subplots
+
+        # Create a subplot with multiple histograms
+        fig = make_subplots(rows=1, cols=len(samples), subplot_titles=samples)
+
+        # Create a histogram trace for each donor within each sample subplot
+        for i, sample in enumerate(samples):
+            sample_data = rna.obs[rna.obs['sample'] == sample]
+            
+            traces = []
+            for donor in unique_donors:
+                donor_data = sample_data[sample_data['donor_id'] == donor]
+                trace = go.Histogram(x=donor_data[level], nbinsx=100, name=f'{sample} - {donor}')
+                traces.append(trace)
+            
+            # Add traces to the subplot
+            for trace in traces:
+                fig.add_trace(trace, row=1, col=i + 1)
+
+        # Update layout
+        fig.update_layout(
+            title=f"Distribution of {level} for all samples and the corresponding donors",
+            showlegend=True,
+            height=800,
+            margin=dict(t=150),  # Add more space between title and plot
+        )
+
+        fig.update_layout(
+            dict(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=list([
+                            dict(
+                                args=["visible", "legendonly"],
+                                label="Deselect All",
+                                method="restyle"
+                            ),
+                            dict(
+                                args=["visible", True],
+                                label="Select All",
+                                method="restyle"
+                            )
+                        ]),
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=1,
+                        xanchor="right",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=f"{level}",
+            yaxis_title="Frequency"
+        )
+
+        # Show the plot
+        figures.append(fig)
+
+
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Generate HTML ----------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     with open('rna_qc_donor_mqc.html', 'w') as f:
         for fig in figures:
             f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
-
-
-
-
 
 
 print("[FINISH]")
