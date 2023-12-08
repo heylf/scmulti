@@ -16,6 +16,6 @@ workflow QC {
 
     emit:
         ch_versions
-        json = QC_RNA.out.json
+        htmls = QC_RNA.out.htmls
 
 }
