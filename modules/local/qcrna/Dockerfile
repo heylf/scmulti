@@ -1,8 +1,11 @@
 # Use an official Python runtime as a parent image
 FROM python:3.10
 
-# Install Muon
+# Install packages
 RUN pip install muon
+RUN pip install nbformat
+RUN pip install pysam
+RUN pip install plotly
 
 # Set the working directory to /app
 WORKDIR /home/muon
