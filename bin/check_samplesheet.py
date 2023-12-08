@@ -23,17 +23,11 @@ class RowChecker:
             validated and transformed row. The order of rows is maintained.
 
     """
-
-    VALID_FORMATS = (
-        ".h5",
-        ".h5ad",
-        ".mu"
-    )
-
+    
     def __init__(
         self,
         sample_col="sample",
-        first_col="h5",
+        h5_col="h5",
         **kwargs,
     ):
         """
@@ -47,7 +41,7 @@ class RowChecker:
         """
         super().__init__(**kwargs)
         self._sample_col = sample_col
-        self._first_col = first_col
+        self._h5_col = h5_col
         self._seen = set()
         self.modified = []
 
@@ -61,8 +55,7 @@ class RowChecker:
 
         """
         self._validate_sample(row)
-        self._validate_first(row)
-        self._seen.add((row[self._sample_col], row[self._first_col]))
+        self._seen.add((row[self._sample_col], row[self._h5_col]))
         self.modified.append(row)
 
     def _validate_sample(self, row):
@@ -72,23 +65,9 @@ class RowChecker:
         # Sanitize samples slightly.
         row[self._sample_col] = row[self._sample_col].replace(" ", "_")
 
-    def _validate_first(self, row):
-        """Assert that h5 entry is non-empty and has the right format."""
-        if len(row[self._first_col]) <= 0:
-            raise AssertionError("h5 file is required.")
-        self._validate_fastq_format(row[self._first_col])
-
-    def _validate_fastq_format(self, filename):
-        """Assert that a given filename has one of the expected single cell data extensions."""
-        if not any(filename.endswith(extension) for extension in self.VALID_FORMATS):
-            raise AssertionError(
-                f"The FASTQ file has an unrecognized extension: {filename}\n"
-                f"It should be one of: {', '.join(self.VALID_FORMATS)}"
-            )
-
     def validate_unique_samples(self):
         """
-        Assert that the combination of sample name and h5 filename is unique.
+        Assert that the combination of cohort name and h5 filename is unique.
 
         """
         if len(self._seen) != len(self.modified):
@@ -150,14 +129,14 @@ def check_samplesheet(file_in, file_out):
         This function checks that the samplesheet follows the following structure,
         see also the `viral recon samplesheet`_::
 
-            sample,h5
+            cohort,sample,h5
             //TODO
 
     .. _viral recon samplesheet:
         //TODO
 
     """
-    required_columns = {"sample", "h5"}
+    required_columns = {"cohort","sample","h5"}
     # See https://docs.python.org/3.9/library/csv.html#id3 to read up on `newline=""`.
     with file_in.open(newline="") as in_handle:
         reader = csv.DictReader(in_handle, dialect=sniff_format(in_handle))
