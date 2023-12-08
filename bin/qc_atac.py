@@ -3,7 +3,6 @@
 # In[]
 
 import argparse
-import muon as mu
 import anndata as ad
 import scanpy as sc
 import numpy as np
@@ -17,28 +16,35 @@ import numpy as np
 import pandas as pd
 
 # pip install nbformat
+# pip install snapatac2
+# pip install plotly
 
 # In[]
-#########################################
-###### GLOBAL VARS and DIRECTORIES ######
-#########################################
+########################################################################################################################
+###### GLOBAL VARS and DIRECTORIES #####################################################################################
+########################################################################################################################
 
-# tool_description = """
-# Runnin QC
-# """
+tool_description = """
+Runnin QC
+"""
 
-# # parse command line arguments
-# parser = argparse.ArgumentParser(description=tool_description, formatter_class=argparse.RawDescriptionHelpFormatter)
+# parse command line arguments
+parser = argparse.ArgumentParser(description=tool_description, formatter_class=argparse.RawDescriptionHelpFormatter)
 
-# # version
-# parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
-# parser.add_argument("-v", "--version", action="version", version="%(prog)s 0.1.0")
-# parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=True, help="Sample names")
-# parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="Output dir")
-# parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=True, help="Reference genome that was \
-# used for alignment. \")
+# version
+parser.add_argument("-v", "--version", action="version", version="%(prog)s 0.1.0")
 
-# args = vars(parser.parse_args())
+# Required arguments
+parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
+parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=True, help="Sample names")
+parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="Output dir")
+parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=True, help="Reference genome that was \
+                    used for alignment.")
+
+# Optional arguments
+parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
+
+args = vars(parser.parse_args())
 
 if __name__ == '__main__':
 
@@ -78,9 +84,10 @@ if __name__ == '__main__':
         d = pd.DataFrame(data=d, index=[x for x in range(0, num_group*num_replicates)])
         return(d)
 
-    #######################
-    ###### LOAD DATA ######
-    #######################
+    #In[]
+    ####################################################################################################################
+    ###### LOAD DATA ###################################################################################################
+    ####################################################################################################################
     # This will get us the data from cellranger-arc
     # It also generates a table for the necessary information (arc_aggr_df.to_csv)
     print("[TASK] Load data")
@@ -93,11 +100,12 @@ if __name__ == '__main__':
 
     fragment_files = []
     #for file in args['files'].split(","):
-    for file in ["/home/florian/Documents/tmp_data_folder/output/cellrangerarc/count/test_scARC/outs/filtered_feature_bc_matrix.h5", "/home/florian/Documents/tmp_data_folder/output/cellrangerarc/count/test_scARC/outs/filtered_feature_bc_matrix.h5"]:
+    for file in ['/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5',
+                 '/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5']:
         fragment_files.append("/".join(file.split("/")[:-1]) + "/atac_fragments.tsv.gz")
 
     atacs = snap.pp.import_data(fragment_files, 
-                                chrom_sizes=snap.genome.mm10,
+                                chrom_sizes=snap.genome.hg38,
                                 sorted_by_barcode=False)
 
     # In[]
@@ -110,9 +118,9 @@ if __name__ == '__main__':
 
 
     # In[]
-    ###########################
-    ###### QC PLOTS ATAC ######
-    ###########################
+    ####################################################################################################################
+    ###### QC PLOTS ATAC ###############################################################################################
+    ####################################################################################################################
     print("[TASK] Generate QC plots RNA")
 
     figures = []
@@ -178,35 +186,292 @@ if __name__ == '__main__':
                           showlegend=True)
         figures.append(fig)
 
-        # TODO make more beautiful
         if ( level != "tsse"):
-            fig = px.histogram(combined_df, x=f'log_{level}', nbins=100,
-                            facet_col="sample", facet_col_wrap=4,
-                            log_x=True, labels={level: f"log10 log_{level}"},
-                            width=800, height=800)
-            fig.update_layout(title=f"Distribution of log10 {level}",
-                            showlegend=True)
-            fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+            # Create a histogram trace for each sample
+            traces = []
+            for sample in samples:
+                sample_data = combined_df[combined_df['sample'] == sample]
+                trace = go.Histogram(x=sample_data[f'log_{level}'], nbinsx=100, name=sample)
+                traces.append(trace)
+
+            # Create the merged plot
+            fig = go.Figure(data=traces)
+
+            # Update layout
+            fig.update_layout(
+                title=f"Distribution of log10 {level} for all samples",
+                showlegend=True,
+                height=800,
+                margin=dict(t=150)  # Add more space between title and plot
+            )
+
+            fig.update_layout(
+                dict(
+                    updatemenus=[
+                        dict(
+                            type="buttons",
+                            direction="left",
+                            buttons=list([
+                                dict(
+                                    args=["visible", "legendonly"],
+                                    label="Deselect All",
+                                    method="restyle"
+                                ),
+                                dict(
+                                    args=["visible", True],
+                                    label="Select All",
+                                    method="restyle"
+                                )
+                            ]),
+                            pad={"r": 10, "t": 10},
+                            showactive=False,
+                            x=1,
+                            xanchor="right",
+                            y=1.1,
+                            yanchor="top"
+                        ),
+                    ]
+                )
+            )
+
+            fig.update_layout(
+                xaxis_title=f"log_{level}",
+                yaxis_title="Frequency"
+            )
+
             figures.append(fig)
 
-        fig = px.histogram(combined_df, x=level, nbins=100,
-                           facet_col="sample", facet_col_wrap=4,
-                           log_x=False, labels={level: f"{level}"},
-                           width=800, height=800)
-        fig.update_layout(title=f"Distribution of {level}",
-                          showlegend=True)
+        # Create a histogram trace for each sample
+        traces = []
+        for sample in samples:
+            sample_data = combined_df[combined_df['sample'] == sample]
+            trace = go.Histogram(x=sample_data[level], nbinsx=100, name=sample)
+            traces.append(trace)
+
+        # Create the merged plot
+        fig = go.Figure(data=traces)
+
+        # Update layout
+        fig.update_layout(
+            title=f"Distribution of {level} for all samples",
+            showlegend=True,
+            height=800,
+            margin=dict(t=150)  # Add more space between title and plot
+        )
+
+        fig.update_layout(
+            dict(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=list([
+                            dict(
+                                    args=["visible", "legendonly"],
+                                    label="Deselect All",
+                                    method="restyle"
+                            ),
+                            dict(
+                                    args=["visible", True],
+                                    label="Select All",
+                                    method="restyle"
+                            )
+                        ]),
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=1,
+                        xanchor="right",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=f"{level}",
+            yaxis_title="Frequency"
+        )
+
         figures.append(fig)
-        fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+
+# In[]
+# ----------------------------------------------------------------------------------------------------------------------
+# Generate HTML --------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
+with open('atac_qc_sample_mqc.html', 'w') as f:
+    for fig in figures:
+        f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+
+
+# In[]
+########################################################################################################################
+###### QC PLOTS RNA DEMULIPLEXED #######################################################################################
+########################################################################################################################
+
+# TODO
+#demux_files = args['demux'].split(",")
+demux_files = ["/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv",
+               "/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv"]
+
+if ( demux_files ):
+
+    # Do Demultiplexing
+    assignments = []
+    for i, file in enumerate(demux_files):
+        ass = pd.read_table(file)[["cell", "donor_id"]]
+        ass.cell += f"_{samples[i]}"
+        ass.set_index("cell", inplace=True)
+        assignments.append(ass)
+    assignments = pd.concat(assignments, axis=0)
+
+    # In[]
+    demux_combined_df = assignments.join(combined_df, how="left")
+
+
+    # In[]
+    # Get number of donors
+    ndonor = len(set(demux_combined_df["donor_id"].tolist()))
+
+    # Generate Colors for organoids
+    r = lambda: random.randint(0,255)
+    DONOR_COLORS = ['#%02X%02X%02X' % (r(),r(),r()) for i in range(0,ndonor)]
+    DONOR_COLORS[sorted(set(demux_combined_df["donor_id"].tolist())).index("unassigned")] = "Black"
+    DONOR_COLORS[sorted(set(demux_combined_df["donor_id"].tolist())).index("doublet")] = "Red"
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Plots ------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # Get unique donors
+    unique_donors = demux_combined_df['donor_id'].unique()
+
+    figures = []
+
+    for level in ["n_fragment", "tsse"]:
+
+        if ( level != "tsse"):
+
+            # Create a histogram trace for each sample
+            traces = []
+            for donor in unique_donors:
+                donor_data = demux_combined_df[demux_combined_df['donor_id'] == donor]
+                trace = go.Histogram(x=donor_data[f'log_{level}'], nbinsx=100, name=donor)
+                traces.append(trace)
+
+            # Create the merged plot
+            fig = go.Figure(data=traces)
+
+            # Update layout
+            fig.update_layout(
+                title=f"Distribution of log10 {level} for all donors",
+                showlegend=True,
+                height=800,
+                margin=dict(t=150)  # Add more space between title and plot
+            )
+
+            fig.update_layout(
+                dict(
+                    updatemenus=[
+                        dict(
+                            type="buttons",
+                            direction="left",
+                            buttons=list([
+                                dict(
+                                    args=["visible", "legendonly"],
+                                    label="Deselect All",
+                                    method="restyle"
+                                ),
+                                dict(
+                                    args=["visible", True],
+                                    label="Select All",
+                                    method="restyle"
+                                )
+                            ]),
+                            pad={"r": 10, "t": 10},
+                            showactive=False,
+                            x=1,
+                            xanchor="right",
+                            y=1.1,
+                            yanchor="top"
+                        ),
+                    ]
+                )
+            )
+
+            fig.update_layout(
+                xaxis_title=f"log_{level}",
+                yaxis_title="Frequency"
+            )
+
+            figures.append(fig)
+
+        # Create a histogram trace for each sample
+        traces = []
+        for donor in unique_donors:
+            donor_data = demux_combined_df[demux_combined_df['donor_id'] == donor]
+            trace = go.Histogram(x=donor_data[level], nbinsx=100, name=donor)
+            traces.append(trace)
+
+        # Create the merged plot
+        fig = go.Figure(data=traces)
+
+        # Update layout
+        fig.update_layout(
+            title=f"Distribution of {level} for all donors",
+            showlegend=True,
+            height=800,
+            margin=dict(t=150)  # Add more space between title and plot
+        )
+
+        fig.update_layout(
+            dict(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=list([
+                            dict(
+                                    args=["visible", "legendonly"],
+                                    label="Deselect All",
+                                    method="restyle"
+                            ),
+                            dict(
+                                    args=["visible", True],
+                                    label="Select All",
+                                    method="restyle"
+                            )
+                        ]),
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=1,
+                        xanchor="right",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=f"{level}",
+            yaxis_title="Frequency"
+        )
+
         figures.append(fig)
 
     # In[]
-    # ----------------------------------------------------------------------------------------------------------------------
-    # Generate HTML --------------------------------------------------------------------------------------------------------
-    # ----------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+    # Generate HTML ----------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
-    with open('atac_qc_sample_mqc.html', 'w') as f:
+    with open('atac_qc_donor_mqc.html', 'w') as f:
         for fig in figures:
             f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
-    print("[FINISH]")
-    # %%
+
+print("[FINISH]")
+# %%
