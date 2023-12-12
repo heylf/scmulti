@@ -75,7 +75,8 @@ workflow SCMULTI {
 
     QC ( h5s ) 
     ch_versions = ch_versions.mix(QC.out.ch_versions)
-    ch_rnaqc_htmls = QC.out.htmls
+    ch_qcrna_htmls = QC.out.rna_htmls
+    ch_qcatac_htmls = QC.out.atac_htmls
 
     CUSTOM_DUMPSOFTWAREVERSIONS (
         ch_versions.unique().collectFile(name: 'collated_versions.yml')
@@ -90,18 +91,15 @@ workflow SCMULTI {
     methods_description    = WorkflowScmulti.methodsDescriptionText(workflow, ch_multiqc_custom_methods_description)
     ch_methods_description = Channel.value(methods_description)
 
-    ch_rnaqc_htmls.dump(tag: 'rnaqc', pretty: true)
-    //ch_rnaqc_donor.dump(tag: 'rnaqc_donor', pretty: true)
-
-    //print(ch_rnaqc_htmls.view())
-    //print(ch_rnaqc_htmls.collect{ meta, qcfile -> qcfile }.ifEmpty([]).view())
+    ch_qcrna_htmls.dump(tag: 'qcrna', pretty: true)
+    ch_qcatac_htmls.dump(tag: 'qcatac', pretty: true)
 
     ch_multiqc_files = Channel.empty()
     ch_multiqc_files = ch_multiqc_files.mix(ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
     ch_multiqc_files = ch_multiqc_files.mix(ch_methods_description.collectFile(name: 'methods_description_mqc.yaml'))
     ch_multiqc_files = ch_multiqc_files.mix(CUSTOM_DUMPSOFTWAREVERSIONS.out.mqc_yml.collect())
-    ch_multiqc_files = ch_multiqc_files.mix(ch_rnaqc_htmls.collect{ meta, qcfile -> qcfile }.ifEmpty([]))
-    //ch_multiqc_files = ch_multiqc_files.mix(ch_rnaqc_donor.collect{ meta, qcfile -> qcfile }.ifEmpty([]))
+    ch_multiqc_files = ch_multiqc_files.mix(ch_qcrna_htmls.collect{ meta, qcfile -> qcfile }.ifEmpty([]))
+    ch_multiqc_files = ch_multiqc_files.mix(ch_qcatac_htmls.collect{ meta, qcfile -> qcfile }.ifEmpty([]))
 
     print(ch_multiqc_files.view())
 
