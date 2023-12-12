@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# In[]
-
 import argparse
 import anndata as ad
 import scanpy as sc
@@ -18,8 +16,8 @@ import pandas as pd
 # pip install nbformat
 # pip install snapatac2
 # pip install plotly
+# pip install muon
 
-# In[]
 ########################################################################################################################
 ###### GLOBAL VARS and DIRECTORIES #####################################################################################
 ########################################################################################################################
@@ -35,7 +33,6 @@ parser = argparse.ArgumentParser(description=tool_description, formatter_class=a
 parser.add_argument("-v", "--version", action="version", version="%(prog)s 0.1.0")
 
 # Required arguments
-parser.add_argument("-o", "--out", dest="out", metavar='str', required=True, help="Single cell files")
 parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=True, help="Sample names")
 parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="Output dir")
 parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=True, help="Reference genome that was \
@@ -48,7 +45,6 @@ args = vars(parser.parse_args())
 
 if __name__ == '__main__':
 
-    # In[]
     print("[START]")
 
     # Seeds (!!! DO NOT CHANGE THIS SEED !!!)
@@ -56,6 +52,15 @@ if __name__ == '__main__':
     random.seed(seed)
     print(f"[NOTE] seed {seed}")
 
+    # Set genome
+    genome = None
+
+    if ( args['genome'] == "hg38" ):
+        genome = snap.genome.hg38
+    elif ( args['genome'] == "hg19" ):
+        genome = snap.genome.hg19
+    elif ( args['genome'] == "mm10" ):
+        genome = snap.genome.mm10
 
     # Calculate confidence intervale function
     def get_ci_df(count_series, mode, rna):
@@ -84,7 +89,6 @@ if __name__ == '__main__':
         d = pd.DataFrame(data=d, index=[x for x in range(0, num_group*num_replicates)])
         return(d)
 
-    #In[]
     ####################################################################################################################
     ###### LOAD DATA ###################################################################################################
     ####################################################################################################################
@@ -92,32 +96,18 @@ if __name__ == '__main__':
     # It also generates a table for the necessary information (arc_aggr_df.to_csv)
     print("[TASK] Load data")
 
-
-    # samples = args['samples'].split(",")
-    samples = ['test_scARC_1', 'test_scARC_2']
-
-    num_samples = 0
+    samples = args['samples'].split(",")
 
     fragment_files = []
-    #for file in args['files'].split(","):
-    for file in ['/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5',
-                 '/home/florian/Documents/tmp_data_folder/delete_hca_organoid/processed/sSL0129_BrainO_R2_A_10xM_Multiome/sSL0129_BrainO_R2_A_10xM_Multiome/outs/filtered_feature_bc_matrix.h5']:
+   
+    for file in args['files'].split(","):
         fragment_files.append("/".join(file.split("/")[:-1]) + "/atac_fragments.tsv.gz")
 
     atacs = snap.pp.import_data(fragment_files, 
-                                chrom_sizes=snap.genome.hg38,
+                                chrom_sizes=genome,
                                 sorted_by_barcode=False)
 
-    # In[]
-    # Test
-    fragment_file = snap.datasets.pbmc5k()
-    atacs = snap.pp.import_data([fragment_file, fragment_file], 
-                                chrom_sizes=snap.genome.hg38,
-                                sorted_by_barcode=False)
-    samples = ['test_scARC_1', 'test_scARC_2']
-
-
-    # In[]
+    # TODO turn histograms into lines (KDE)
     ####################################################################################################################
     ###### QC PLOTS ATAC ###############################################################################################
     ####################################################################################################################
@@ -151,7 +141,7 @@ if __name__ == '__main__':
     combined_fig.update_xaxes(title="log Fragment size")
     figures.append(combined_fig)
 
-    snap.metrics.tsse(atacs, snap.genome.mm10)
+    snap.metrics.tsse(atacs, genome)
     
     combined_fig = sp.make_subplots(rows=1, cols=1)  
 
@@ -161,12 +151,12 @@ if __name__ == '__main__':
         fig.data[0].showlegend = True
         combined_fig.add_trace(fig.data[0], row=1, col=1)
 
+    # TODO bug in plot. You have to separate each of those plot and you cannot combine them!
     combined_fig.update_layout(title=f"TSS enrichment and number of unique fragments", 
                                legend=dict(orientation="h", y=1.02, x=0.5))
     combined_fig.update_yaxes(title="TSS enrichment score")
     combined_fig.update_xaxes(type="log", title="log Number of unique fragments")
     figures.append(combined_fig)
-
 
     for i, atac in enumerate(atacs):
         atac.obs["sample"] = samples[i]
@@ -302,22 +292,19 @@ if __name__ == '__main__':
 # Generate HTML --------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
 
-with open('atac_qc_sample_mqc.html', 'w') as f:
+with open('2_atac_qc_sample_mqc.html', 'w') as f:
     for fig in figures:
         f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
 
 # In[]
 ########################################################################################################################
-###### QC PLOTS RNA DEMULIPLEXED #######################################################################################
+###### QC PLOTS ATAC DEMULIPLEXED ######################################################################################
 ########################################################################################################################
 
-# TODO
-#demux_files = args['demux'].split(",")
-demux_files = ["/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv",
-               "/home/florian/Documents/tmp_data_folder/delete_hca_organoid/vireo/sSL0129/donor_ids.tsv"]
+if ( args['demux'] ):
 
-if ( demux_files ):
+    demux_files = args['demux'].split(",")
 
     # Do Demultiplexing
     assignments = []
@@ -328,11 +315,9 @@ if ( demux_files ):
         assignments.append(ass)
     assignments = pd.concat(assignments, axis=0)
 
-    # In[]
     demux_combined_df = assignments.join(combined_df, how="left")
 
 
-    # In[]
     # Get number of donors
     ndonor = len(set(demux_combined_df["donor_id"].tolist()))
 
@@ -463,12 +448,11 @@ if ( demux_files ):
 
         figures.append(fig)
 
-    # In[]
     # ------------------------------------------------------------------------------------------------------------------
     # Generate HTML ----------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
-    with open('atac_qc_donor_mqc.html', 'w') as f:
+    with open('4_atac_qc_donor_mqc.html', 'w') as f:
         for fig in figures:
             f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
