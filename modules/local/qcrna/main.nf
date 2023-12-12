@@ -18,12 +18,14 @@ process QC_RNA {
     script: 
     def sample_names = samples.join(",")
     def h5s = h5s.join(",")
-    def demux = demuxs.join(",")
+    def demuxs = demuxs.join(",")
+    def demuxsArg = demuxs ? "--demux $demuxs" : ""
 
-    """
+    """   
     qc_rna.py \\
         --samples $sample_names \\
-        --files $h5s
+        --files $h5s \\
+        $demuxsArg \\
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
