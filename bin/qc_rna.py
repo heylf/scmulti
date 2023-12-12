@@ -34,7 +34,6 @@ parser.add_argument("-s", "--samples", dest="samples", metavar='str', required=T
 parser.add_argument("-f", "--files", dest="files", metavar='str', required=True, help="h5 files")
 
 # Optional arguments
-parser.add_argument("-o", "--out", dest="out", metavar='str', required=False, help="Single cell files")
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
 parser.add_argument("--thresh_gene", dest="thresh_gene", metavar='str', required=False, 
                     help="Threshold for gene cell count filter", default=100)
@@ -123,6 +122,7 @@ rna.var["mt"] = rna.var_names.str.startswith("MT-") # this will add mitochondria
 rna.var["ribo"] = rna.var_names.str.startswith("RPS") | rna.var_names.str.startswith("RPL") # this will add ribosomal RNA QC
 sc.pp.calculate_qc_metrics(rna, qc_vars=["mt", "ribo"], inplace=True)
 
+# TODO turn histograms into lines (KDE)
 ########################################################################################################################
 ###### QC PLOTS RNA ####################################################################################################
 ########################################################################################################################
@@ -420,7 +420,7 @@ figures.append(fig)
 # Generate HTML --------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
 
-with open(f'rna_qc_sample_mqc.html', 'w') as f:
+with open(f'1_rna_qc_sample_mqc.html', 'w') as f:
     for fig in figures:
         f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
@@ -749,7 +749,7 @@ if ( args['demux'] ):
     # Generate HTML ----------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
-    with open('rna_qc_donor_mqc.html', 'w') as f:
+    with open('3_rna_qc_donor_mqc.html', 'w') as f:
         for fig in figures:
             f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
