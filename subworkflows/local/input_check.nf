@@ -14,12 +14,13 @@ workflow INPUT_CHECK {
         samples = null
         demuxs = null
 
+        grouped_ch = 
         SAMPLESHEET_CHECK ( samplesheet )
             .csv
             .splitCsv ( header:true, sep:',' )
             .map { create_h5_channel(it) }
             .groupTuple(by: [0])
-            .map { meta, samples, h5s, demuxs -> [ meta, samples, h5s.flatten(), demuxs.flatten() ] } 
+            .map { meta, samples, h5s, demuxs -> [ meta, samples, h5s.flatten(), demuxs.flatten() ] }
             .set { h5s }
 
     emit:
@@ -41,10 +42,15 @@ def create_h5_channel(LinkedHashMap row) {
 
     h5_meta = [ meta, row.sample, file(row.h5) ]
 
-    if (!file(row.demux).exists()) {
-        exit 1, "ERROR: Please check input samplesheet -> donor annotation file does not exist!\n${row.demux}"
+    if ( row.demux ) {
+
+        if (!file(row.demux).exists()) {
+            exit 1, "ERROR: Please check input samplesheet -> donor annotation file does not exist!\n${row.demux}"
+        } else {
+            h5_meta.add(file(row.demux))
+        }
     } else {
-        h5_meta.add(file(row.demux))
+        h5_meta.add([])
     }
 
     return h5_meta
