@@ -13,6 +13,9 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
+import os
+os.environ[ 'NUMBA_CACHE_DIR' ] = '/tmp/'
+
 # pip install nbformat
 # pip install snapatac2
 # pip install plotly
