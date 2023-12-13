@@ -11,9 +11,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import random
 
-import os
-os.environ[ 'NUMBA_CACHE_DIR' ] = '/tmp/'
-
 # pip install nbformat
 # pip install pysam
 # pip install plotly
