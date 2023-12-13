@@ -7,6 +7,9 @@ RUN pip install nbformat
 RUN pip install plotly
 RUN pip install muon
 
+# Set the environment variable NUMBA_CACHE_DIR
+ENV NUMBA_CACHE_DIR '/tmp'
+
 # Set the working directory to /app
 WORKDIR /home/snapatac2
 
