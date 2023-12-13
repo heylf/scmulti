@@ -6,6 +6,11 @@ RUN pip install muon
 RUN pip install nbformat
 RUN pip install pysam
 RUN pip install plotly
+RUN pip install -U numba
+RUN pip install -U scanpy
+
+# Set the environment variable NUMBA_CACHE_DIR
+ENV NUMBA_CACHE_DIR '/tmp'
 
 # Set the working directory to /app
 WORKDIR /home/muon
