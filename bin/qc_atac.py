@@ -321,12 +321,6 @@ if ( args['demux'] ):
     # Get number of donors
     ndonor = len(set(demux_combined_df["donor_id"].tolist()))
 
-    # Generate Colors for organoids
-    r = lambda: random.randint(0,255)
-    DONOR_COLORS = ['#%02X%02X%02X' % (r(),r(),r()) for i in range(0,ndonor)]
-    DONOR_COLORS[sorted(set(demux_combined_df["donor_id"].tolist())).index("unassigned")] = "Black"
-    DONOR_COLORS[sorted(set(demux_combined_df["donor_id"].tolist())).index("doublet")] = "Red"
-
     # ------------------------------------------------------------------------------------------------------------------
     # Plots ------------------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
