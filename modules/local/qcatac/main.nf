@@ -24,13 +24,14 @@ process QC_ATAC {
     def h5s = h5s.join(",")
     def demuxs = demuxs.join(",")
     def demuxsArg = demuxs ? "--demux $demuxs" : ""
+    def tmpdir = params.tmpdir_atac ? "--tmpdir ${params.tmpdir_atac}" : ""
 
     """   
     qc_atac.py \\
         --samples $sample_names \\
         --files $h5s \\
         --genome hg38 \\
-        --tmpdir /tmp \\
+        $tmpdir \\
         $demuxsArg \\
 
     cat <<-END_VERSIONS > versions.yml
