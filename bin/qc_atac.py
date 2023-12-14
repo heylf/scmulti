@@ -40,6 +40,7 @@ parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=Tru
 
 # Optional arguments
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
+parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=True, help="Tmp directry of snapatac")
 
 args = vars(parser.parse_args())
 
@@ -105,7 +106,8 @@ if __name__ == '__main__':
 
     atacs = snap.pp.import_data(fragment_files, 
                                 chrom_sizes=genome,
-                                sorted_by_barcode=False)
+                                sorted_by_barcode=False,
+                                tempdir=args['tmp'])
 
     # TODO turn histograms into lines (KDE)
     ####################################################################################################################

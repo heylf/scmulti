@@ -30,6 +30,7 @@ process QC_ATAC {
         --samples $sample_names \\
         --files $h5s \\
         --genome hg38 \\
+        --tmpdir /tmp \\
         $demuxsArg \\
 
     cat <<-END_VERSIONS > versions.yml
