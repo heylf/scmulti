@@ -18,6 +18,8 @@ import pandas as pd
 # pip install plotly
 # pip install muon
 
+# TODO include cores to spreed up generation process (ncore for snapatac options)
+
 ########################################################################################################################
 ###### GLOBAL VARS and DIRECTORIES #####################################################################################
 ########################################################################################################################
@@ -40,7 +42,7 @@ parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=Tru
 
 # Optional arguments
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
-parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=True, help="Tmp directry of snapatac")
+parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=False, help="Tmp directry of snapatac", default=".")
 
 args = vars(parser.parse_args())
 
@@ -143,7 +145,7 @@ if __name__ == '__main__':
     combined_fig.update_xaxes(title="log Fragment size")
     figures.append(combined_fig)
 
-    snap.metrics.tsse(atacs, genome)
+    snap.metrics.tsse(atacs, genome, n_jobs=-1)
     
     combined_fig = sp.make_subplots(rows=1, cols=1)  
 
