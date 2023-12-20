@@ -25,14 +25,19 @@ process QC_ATAC {
     def demuxs = demuxs.join(",")
     def demuxsArg = demuxs ? "--demux $demuxs" : ""
     def tmpdir = params.tmpdir_atac ? "--tmpdir ${params.tmpdir_atac}" : ""
+    def chrlengths = params.chrlengths ? "--chrlength ${params.chrlengths}" : ""
+    def annotation = params.annotation ? "--annotation ${params.annotation}" : ""
 
     """   
     qc_atac.py \\
         --samples $sample_names \\
         --files $h5s \\
-        --genome hg38 \\
-        $tmpdir \\
+        --genome custom \\
         $demuxsArg \\
+        $tmpdir \\
+        $chrlengths \\
+        $annotation \\
+
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

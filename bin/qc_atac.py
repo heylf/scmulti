@@ -43,6 +43,10 @@ parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=Tru
 # Optional arguments
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
 parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=False, help="Tmp directry of snapatac", default=".")
+parser.add_argument("--chrlength", dest="glf", metavar='str', required=False, 
+                    help="Genome length file")
+parser.add_argument("--annotation", dest="annotation", metavar='str', required=False, 
+                    help="Genome annotation GTF/GFF file")
 
 args = vars(parser.parse_args())
 
@@ -57,13 +61,33 @@ if __name__ == '__main__':
 
     # Set genome
     genome = None
+    annotation = None
 
     if ( args['genome'] == "hg38" ):
         genome = snap.genome.hg38
+        annotation = genome
     elif ( args['genome'] == "hg19" ):
         genome = snap.genome.hg19
+        annotation = genome
     elif ( args['genome'] == "mm10" ):
         genome = snap.genome.mm10
+        annotation = genome
+    elif ( genome == "custom" ):
+        assert ( args['glf'] != None ), "Please provide a genome length file"
+        assert ( args['annotation'] != None ), "Please provide an annotation file"
+
+        glf_file = args['glf']
+        genome_length_dict = {}
+
+        with open(glf_file, 'r') as file:
+            for line in file:
+                line = line.strip().split('\t')
+                chromosome = line[0]
+                value = int(line[1])
+                genome_length_dict[chromosome] = value
+
+        genome = genome_length_dict
+        annotation = args['annotation']
 
     # Calculate confidence intervale function
     def get_ci_df(count_series, mode, rna):
@@ -145,7 +169,7 @@ if __name__ == '__main__':
     combined_fig.update_xaxes(title="log Fragment size")
     figures.append(combined_fig)
 
-    snap.metrics.tsse(atacs, genome, n_jobs=-1)
+    snap.metrics.tsse(atacs, annotation, n_jobs=-1)
     
     combined_fig = sp.make_subplots(rows=1, cols=1)  
 
