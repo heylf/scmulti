@@ -1,6 +1,6 @@
 process QC_ATAC {
     tag "$meta.id"
-    label 'process_high'
+    label 'process_medium'
 
     container "heylf/snapatac2:2.5.1"
 
