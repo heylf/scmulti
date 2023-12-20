@@ -170,7 +170,7 @@ if __name__ == '__main__':
     combined_fig.update_xaxes(title="log Fragment size")
     figures.append(combined_fig)
 
-    snap.metrics.tsse(atacs, annotation, n_jobs=-1)
+    snap.metrics.tsse(atacs, annotation)
     
     combined_fig = sp.make_subplots(rows=1, cols=1)  
 
