@@ -43,7 +43,7 @@ parser.add_argument("-g", "--genome", dest="genome", metavar='str', required=Tru
 # Optional arguments
 parser.add_argument("--demux", dest="demux", metavar='str', required=False, help="Demultiplexed files")
 parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=False, help="Tmp directry of snapatac", default=".")
-parser.add_argument("--chrlength", dest="glf", metavar='str', required=False, 
+parser.add_argument("--chrlengths", dest="glf", metavar='str', required=False, 
                     help="Genome length file")
 parser.add_argument("--annotation", dest="annotation", metavar='str', required=False, 
                     help="Genome annotation GTF/GFF file")
