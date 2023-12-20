@@ -72,7 +72,7 @@ if __name__ == '__main__':
     elif ( args['genome'] == "mm10" ):
         genome = snap.genome.mm10
         annotation = genome
-    elif ( genome == "custom" ):
+    elif ( args['genome'] == "custom" ):
         assert ( args['glf'] != None ), "Please provide a genome length file"
         assert ( args['annotation'] != None ), "Please provide an annotation file"
 
@@ -81,6 +81,7 @@ if __name__ == '__main__':
 
         with open(glf_file, 'r') as file:
             for line in file:
+                print(line)
                 line = line.strip().split('\t')
                 chromosome = line[0]
                 value = int(line[1])
