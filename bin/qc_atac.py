@@ -46,7 +46,7 @@ parser.add_argument("--tmpdir", dest="tmp", metavar='str', required=False, help=
 parser.add_argument("--chrlengths", dest="glf", metavar='str', required=False, 
                     help="Genome length file")
 parser.add_argument("--annotation", dest="annotation", metavar='str', required=False, 
-                    help="Genome annotation GTF/GFF file")
+                    help="Genome annotation GTF/GFF.gz file (has to be gzipped!)")
 
 args = vars(parser.parse_args())
 
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     combined_fig.update_xaxes(title="log Fragment size")
     figures.append(combined_fig)
 
-    snap.metrics.tsse(atacs, annotation)
+    snap.metrics.tsse(atacs, annotation, n_jobs=-1)
     
     combined_fig = sp.make_subplots(rows=1, cols=1)  
 
