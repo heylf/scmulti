@@ -122,7 +122,6 @@ rna.var["mt"] = rna.var_names.str.startswith("MT-") # this will add mitochondria
 rna.var["ribo"] = rna.var_names.str.startswith("RPS") | rna.var_names.str.startswith("RPL") # this will add ribosomal RNA QC
 sc.pp.calculate_qc_metrics(rna, qc_vars=["mt", "ribo"], inplace=True)
 
-# TODO turn histograms into lines (KDE)
 ########################################################################################################################
 ###### QC PLOTS RNA ####################################################################################################
 ########################################################################################################################
@@ -292,7 +291,8 @@ for level in ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_
             title=f"Means of {level}"
         ),
         height=500,
-        width=800
+        width=800,
+        title=f"Bootstrapped mean of {level} for each sample"
     )
 
     # Create the figure
@@ -313,19 +313,30 @@ fig = px.histogram(rna.var, x="log_n_cells_by_counts", nbins=100,
 fig.add_vline(x=np.log10(THRESH_GENE_FILTER))
 figures.append(fig)
 
+
+n_cells = 10_000
+if ( rna.n_obs < n_cells ):
+    n_cells = rna.n_obs 
+
+bool_array = np.full(rna.n_obs, False)
+bool_array[:n_cells] = True
+np.random.shuffle(bool_array)
+
 fig = go.Figure()
 
+check_rna = rna.obs[bool_array]
+
 fig.add_trace(go.Scatter(
-    x=rna.obs["total_counts"],
-    y=rna.obs["n_genes_by_counts"],
+    x=check_rna["total_counts"],
+    y=check_rna["n_genes_by_counts"],
     mode="markers",
     marker=dict(
-        size=rna.obs["pct_counts_ribo"],
+        size=check_rna["pct_counts_ribo"],
         sizemode="diameter",
         sizeref=5,
         sizemin=0.1,
-        color=rna.obs["pct_counts_mt"],
-        colorscale="RdYlBu_r",
+        color=check_rna["pct_counts_mt"],
+        colorscale="bluered",
         cmin=0,
         cmax=100,
         colorbar=dict(
@@ -338,10 +349,10 @@ fig.add_trace(go.Scatter(
     text=[
         f"total_counts: {count}<br>n_genes_by_counts: {genes}<br>pct_counts_ribo: {ribo}<br>pct_counts_mt: {mt}"
         for count, genes, ribo, mt in zip(
-            rna.obs["total_counts"],
-            rna.obs["n_genes_by_counts"],
-            np.round(rna.obs["pct_counts_ribo"]),
-            np.round(rna.obs["pct_counts_mt"])
+            check_rna["total_counts"],
+            check_rna["n_genes_by_counts"],
+            np.round(check_rna["pct_counts_ribo"]),
+            np.round(check_rna["pct_counts_mt"])
         )
     ]
 ))
@@ -350,7 +361,7 @@ fig.add_shape(
     type="line",
     x0=THRESH_UMI_N_GENES,
     x1=THRESH_UMI_N_GENES,
-    y1=max(rna.obs["n_genes_by_counts"]),
+    y1=max(check_rna["n_genes_by_counts"]),
     line=dict(
         color="black",
         width=1
@@ -361,7 +372,7 @@ fig.add_shape(
     type="line",
     y0=THRESH_UMI_N_GENES,
     y1=THRESH_UMI_N_GENES,
-    x1=max(rna.obs["total_counts"]),
+    x1=max(check_rna["total_counts"]),
     line=dict(
         color="black",
         width=1
@@ -369,7 +380,7 @@ fig.add_shape(
 )
 
 fig.update_layout(
-    title="Scatter plot of total_counts vs n_genes_by_counts vs pct_counts_mt vs pct_counts_ribo. <br>\
+    title=f"Scatter plot of total_counts vs n_genes_by_counts vs pct_counts_mt vs pct_counts_ribo of {n_cells} cells. \
         Size of the diameter corresponds to the pct_counts_ribo.",
     xaxis=dict(
         type="log",
@@ -504,21 +515,31 @@ if ( args['demux'] ):
     figures.append(fig)
 
     # Plot
-    d = rna.obs.groupby("donor_id").size().sort_values(ascending=False).rename("ncells").reset_index()\
-        .assign(donor=lambda df: pd.Categorical(df["donor_id"].to_list(), df["donor_id"].to_list(), ordered=True))
-        
+    rna.obs['sample_donor_id'] = [rna.obs['sample'][i] + "_" + rna.obs['donor_id'][i] for i in range(0, rna.n_obs)]
+
+    d = rna.obs.groupby("sample_donor_id").size().sort_values(ascending=False).rename("ncells").reset_index()\
+        .assign(donor=lambda df: pd.Categorical(df["sample_donor_id"].to_list(), 
+                                                df["sample_donor_id"].to_list(), ordered=True))
+    
+    d['category_cells'] = [i.split("_")[1] for i in d['sample_donor_id']]
+
+    for i in range(0, len(d)):
+        if (d['category_cells'][i] != 'unassigned' and d['category_cells'][i] != 'doublet'):
+            d['category_cells'][i] = 'assigned'
+
     # ------------------------------------------------------------------------------------------------------------------
     # Cell Counts ------------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
-    fig = px.bar(d, x="donor_id", y="ncells", text="ncells", barmode="stack")
+    fig = px.bar(d, x="sample_donor_id", y="ncells", text="ncells", color='category_cells', 
+                 barmode="stack", category_orders={"category_cells": ["unassigned", "doublet", "assigned"]})
     fig.update_layout(
         yaxis_title="Number of cells",
         xaxis_title="Samples",
-        title="Total number of cells per sample",
+        title="Total number of cells per donor",
         hovermode=False  # Deactivate hover info
     )
     fig.update_layout(xaxis_tickangle=-90)
-    figures.append(fig)     
+    figures.append(fig)
 
     # ------------------------------------------------------------------------------------------------------------------
     # UMI/Gene/MT/RB ---------------------------------------------------------------------------------------------------
@@ -661,7 +682,8 @@ if ( args['demux'] ):
                 title=f"Means of {level}"
             ),
             height=500,
-            width=800
+            width=800,
+            title=f"Bootstrapped mean of {level} for each donor"
         )
 
         # Create the figure
