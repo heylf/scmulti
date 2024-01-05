@@ -18,8 +18,6 @@ import pandas as pd
 # pip install plotly
 # pip install muon
 
-# TODO include cores to spreed up generation process (ncore for snapatac options)
-
 ########################################################################################################################
 ###### GLOBAL VARS and DIRECTORIES #####################################################################################
 ########################################################################################################################
@@ -89,6 +87,8 @@ if __name__ == '__main__':
 
         genome = genome_length_dict
         annotation = args['annotation']
+    else:
+        assert False, "Please provide a valid genome"
 
     # Calculate confidence intervale function
     def get_ci_df(count_series, mode, rna):
@@ -136,7 +136,6 @@ if __name__ == '__main__':
                                 sorted_by_barcode=False,
                                 tempdir=args['tmp'])
 
-    # TODO turn histograms into lines (KDE)
     ####################################################################################################################
     ###### QC PLOTS ATAC ###############################################################################################
     ####################################################################################################################
@@ -171,21 +170,15 @@ if __name__ == '__main__':
     figures.append(combined_fig)
 
     snap.metrics.tsse(atacs, annotation, n_jobs=-1)
-    
-    combined_fig = sp.make_subplots(rows=1, cols=1)  
 
+    # TODO make this better at some point
     for i, atac in enumerate(atacs):
         fig = snap.pl.tsse(atac, interactive=True, show=False, out_file=None)
-        fig.data[-1].name = samples[i]
-        fig.data[0].showlegend = True
-        combined_fig.add_trace(fig.data[0], row=1, col=1)
-
-    # TODO bug in plot. You have to separate each of those plot and you cannot combine them!
-    combined_fig.update_layout(title=f"TSS enrichment and number of unique fragments", 
-                               legend=dict(orientation="h", y=1.02, x=0.5))
-    combined_fig.update_yaxes(title="TSS enrichment score")
-    combined_fig.update_xaxes(type="log", title="log Number of unique fragments")
-    figures.append(combined_fig)
+        fig.update_layout(title=f"{samples[i]}", 
+                                legend=dict(orientation="h", y=1.02, x=0.5))
+        fig.update_yaxes(title="TSS enrichment score")
+        fig.update_xaxes(type="log", title="log Number of unique fragments")
+        figures.append(fig)
 
     for i, atac in enumerate(atacs):
         atac.obs["sample"] = samples[i]
